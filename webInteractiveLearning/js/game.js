@@ -19,46 +19,150 @@
 // Simulation
 
 // Simulaiton Engine
-// kiteComponent, motorControl
+// KiteComponent, motorControl
 
+var simulation;
 
+function setup() {
+  simulation = new Simulation();
+  simulation.start();
+  // network = Network.fromJSON(networkExported);
+}
 
 function Simulation() {
+  this.updateInterval = 10 //ms
+  this.canvas = document.createElement("canvas")
+  this.canvas.width = 400
+  this.canvas.height = 400
+  this.controlValue = 500
+
+  this.context = this.canvas.getContext("2d")
+
+  this.controlSlider = createSlider({"oninput": "simulation.controlValue = parseFloat(this.value)"})
+  this.motorSlider = createSlider()
+
+  this.container = document.getElementById('simulation')
+
+  this.container.appendChild(this.canvas)
+  this.container.appendChild(document.createElement("br"))
+  this.container.appendChild(createParagraph("control:"))
+  this.container.appendChild(this.controlSlider)
+  this.container.appendChild(document.createElement("br"))
+  this.container.appendChild(createParagraph("motor position:"))
+  this.container.appendChild(this.motorSlider)
+
+
+  this.timerText = new TextComponent(this.canvas.width-200, 40)
+  this.rotationWarningText = new TextComponent(this.canvas.width/2-100, this.canvas.height/2-30, {"text": "Lines crossed!"})
+  this.gameOverText = new TextComponent(this.canvas.width/2-100, this.canvas.height/2-30, {"text": "Game Over", "active": false})
+
+  this.drawables = [this.timerText, this.rotationWarningText, this.gameOverText]
+
+  this.datasets = []
+  this.activeSet = []
 }
 
 Simulation.prototype = {
 
+  start : function(network) {
+    this.frameNo = 0;
+    this.interval = setInterval(this.loop.bind(this), this.updateInterval)
 
+    this.kite = new KiteComponent(200, this.canvas.height-20, 0, network);
+    this.drawables.push(this.kite)
+
+    this.draw()
+  },
+
+  clear : function() {
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  },
+
+  loop : function() {
+
+    this.updateLogic()
+    this.log()
+    this.draw()
+  },
+
+  updateLogic : function() {
+    this.frameNo += 1
+
+    if (this.kite.network) {
+      this.controlValue = this.kite.network.activate(this.kite.normInput(this.canvas))[0]*1000;
+    }
+    this.kite.newPos(this.controlValue)
+
+    if (Math.abs(this.kite.directionUpsideDown) > Math.PI) {
+      this.rotationWarningText.options.active = true
+    } else {
+      this.rotationWarningText.options.active = false
+    }
+
+    if (this.kite.outOfBounds(this.canvas) || (this.frameNo == 3000)) {
+      this.gameOver()
+    }
+
+    this.timerText.options.text = "SCORE: " + this.frameNo;
+  },
+
+  draw : function() {
+    this.clear()
+    this.drawables.map (function(drawable) {
+      drawable.draw(this.context)
+    }, this)
+
+    // store reference
+    this.motorSlider.value = this.kite.motorControl.pos
+
+    if (this.kite.network) {
+      this.controlSlider.value = this.controlValue
+    }
+  },
+
+  log : function() {
+    if (this.frameNo % 10 == 0) {
+      this.activeSet.push( {
+        input: this.kite.normInput(this.canvas),
+        output: [this.controlValue/1000]
+      })
+    }
+  },
+
+  gameOver : function() {
+    this.gameOverText.options.active = true
+    this.rotationWarningText.options.active = false
+
+    clearInterval(this.interval)
+
+    document.getElementById("output").innerHTML = JSON.stringify(this.activeSet, null, 2);
+  }
 
 }
 
 
-var kite;
-var mScore;
-var controlValue = 500;
-
-var dataset = []
-var datasets = []
-
-function setup() {
-  mGameArea.setup();
-  // network = Network.fromJSON(networkExported);
-}
-
-function startGameWithNetwork(network) {
-  kite = new kiteComponent(20, 20, "red", mGameArea.width/2, mGameArea.height-20, network);
-  mScore = new textComponent("30px", "Consolas", "black", mGameArea.width-200, 40);
-  mGameArea.start();
-}
-
-function createDataset() {
-
-  startGameWithNetwork()
+//
+// plotLine: function(line, color) {
+//   ctx = this.context;
+//
+//   // draw the kite
+//   ctx.strokeStyle = "#000000";
+//   if (color) {
+//     ctx.strokeStyle = "#" + color;
+//   }
+//
+//   ctx.lineWidth=1;
+//   ctx.beginPath();
+//   ctx.moveTo(line[0][0], line[0][1]);
+//
+//   for (var i = 1; i < line.length; i++) {
+//     ctx.lineTo(line[i][0], line[i][1]);
+//   }
+//   ctx.stroke();
+// }
 
 
 
-
-}
 
 function plotMultipleStart() {
   mGameArea.clear();
@@ -86,7 +190,7 @@ function plotDataset(dataset) {
 
 
 function playGameFastForward(network, startX, color) {
-  kite = new kiteComponent(20, 20, "red", startX, mGameArea.height-20, network);
+  kite = new KiteComponent(20, 20, "red", startX, mGameArea.height-20, network);
   var position = [];
   for (var i=0; i< 1000; i++) {
     position.push([kite.x, kite.y]);
@@ -100,75 +204,36 @@ function playGameFastForward(network, startX, color) {
   mGameArea.plotLine(position, color)
 }
 
-var mGameArea = {
-  canvas : document.createElement("canvas"),
-  width: 400,
-  height: 400,
-  setup : function() {
-    this.canvas.width = this.width;
-    this.canvas.height = this.height;
-    this.context = this.canvas.getContext("2d");
-    document.body.insertBefore(this.canvas, document.body.childNodes[0]);
-  },
-  start : function() {
-    this.frameNo = 0;
-    this.interval = setInterval(updateGameArea, 10);
-    },
-  clear : function() {
-    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-  },
-  plotLine: function(line, color) {
-    ctx = this.context;
-
-    // draw the kite
-    ctx.strokeStyle = "#000000";
-    if (color) {
-      ctx.strokeStyle = "#" + color;
-    }
-
-    ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.moveTo(line[0][0], line[0][1]);
-
-    for (var i = 1; i < line.length; i++) {
-      ctx.lineTo(line[i][0], line[i][1]);
-    }
-    ctx.stroke();
-  }
-}
-
-function motorControl() {
+function MotorControl() {
   this.pos = 500; // value from 1000 to 0
   this.speed = 10;
   this.dirDelta = 0
   this.update = function( targetPos ) {
     if (targetPos != this.pos) {
       this.pos += Math.sign( targetPos - this.pos) * Math.min(this.speed, Math.abs(targetPos - this.pos));
-      document.getElementById('sliderMotor').value = this.pos;
       this.dirDelta = (this.pos - 500) / 500 * Math.PI/180*3; // change up for 5 degrees per increment
     }
   }
 }
 
-function kiteComponent(width, height, color, x, y, network) {
-  this.width = width;
-  this.height = height;
-  this.color = color;
-  this.x = x;
-  this.y = y;
-  this.network = network
-
-
-  this.velocity = 1.5;
-  this.directionUpsideDown = 0; // upside down coordinate system
+function KiteComponent(x, y, dir, network) {
+  this.x = x
+  this.y = y
+  this.directionUpsideDown = dir // upside down coordinate system
   this.direction = Math.PI - this.directionUpsideDown;
 
-  this.motorControl = new motorControl();
+  // optional
+  this.network = network
 
-  this.draw = function() {
-    ctx = mGameArea.context;
-    ctx.fillStyle = color;
+  this.width = 20
+  this.height = 20
+  this.color = "red"
+  this.velocity = 1.5
 
+  this.motorControl = new MotorControl()
+
+  this.draw = function(ctx) {
+    ctx.fillStyle = this.color;
     ctx.save(); // save the unrotated context of the canvas so we can restore it later
     ctx.translate(this.x,this.y); // move to the point of the kite
     ctx.rotate(this.directionUpsideDown); // rotate the canvas to the specified degrees
@@ -184,15 +249,8 @@ function kiteComponent(width, height, color, x, y, network) {
     ctx.restore(); // we’re done with the rotating so restore the unrotated ctx
   }
 
-  this.newPos = function() {
-    if (network) {
-      controlValue = network.activate(this.normInput())[0]*1000;
-      document.getElementById('sliderControl').value = controlValue;
-      this.motorControl.update(controlValue);
-    } else {
-      this.motorControl.update(controlValue);
-    }
-
+  this.newPos = function(controlValue) {
+    this.motorControl.update(controlValue);
 
     this.directionUpsideDown += this.motorControl.dirDelta;
     this.direction = Math.PI - this.directionUpsideDown;
@@ -200,76 +258,90 @@ function kiteComponent(width, height, color, x, y, network) {
     this.x += Math.sin(this.direction) * this.velocity;
     this.y += Math.cos(this.direction) * this.velocity;
   }
-  this.outOfBounds = function() {
+  this.outOfBounds = function(canvas) {
     var mleft = this.x - this.width/2;
     var mright = this.x + this.width/2;
     var mtop = this.y - this.height/2;
     var mbottom = this.y + this.height/2;
 
-    return (mleft < 0) || (mright > mGameArea.width) || (mtop < 0) || (mbottom > mGameArea.height)
+    return (mleft < 0) || (mright > canvas.width) || (mtop < 0) || (mbottom > canvas.height)
   }
 
-  this.normInput = function() {
-    var x, y, dir, conVal;
-    x = kite.x / mGameArea.width;
-    y = kite.y / mGameArea.height;
-    dir = kite.directionUpsideDown / 2*Math.PI;
+  this.normInput = function(canvas) {
+    var x, y, dir
+    x = this.x / canvas.width
+    y = this.y / canvas.height
+    dir = this.directionUpsideDown / 2*Math.PI
     return [x, y, dir]
   }
 }
 
-function textComponent(fontSize, fontStyle, color, x, y) {
-  this.score = 0;
-  this.fontSize = fontSize;
-  this.fontStyle = fontStyle;
-  this.x = x;
-  this.y = y;
-  this.draw = function() {
-    ctx = mGameArea.context;
-    ctx.font = this.fontSize + " " + this.fontStyle;
-    ctx.fillStyle = color;
-    ctx.fillText(this.text, this.x, this.y);
+function TextComponent(x, y, options) {
+  this.x = x || 0
+  this.y = y || 0
+
+  var defaults = {
+      text: "empty",
+      fontSize: "30px",
+      fontStyle: "Consolas",
+      color: "black",
+      active: true
+  }
+  this.options = merge(defaults, options || {})
+
+  this.draw = function(ctx) {
+    if (this.options.active) {
+      ctx.font = this.options.fontSize + " " + this.options.fontStyle;
+      ctx.fillStyle = this.options.color;
+      ctx.fillText(this.options.text, this.x, this.y);
+    }
   }
 }
 
-function updateGameArea() {
-  var x, height, gap, minHeight, maxHeight, minGap, maxGap;
+function merge() {
+    var obj, name, copy,
+        target = arguments[0] || {},
+        i = 1,
+        length = arguments.length;
 
-  mGameArea.clear();
-  mGameArea.frameNo += 1;
-  mScore.text="SCORE: " + mGameArea.frameNo;
-  mScore.draw();
-  kite.newPos();
-  kite.draw();
+    for (; i < length; i++) {
+        if ((obj = arguments[i]) != null) {
+            for (name in obj) {
+                copy = obj[name];
 
-  if (kite.outOfBounds() || (mGameArea.frameNo == 3000)) {
-    gameOver();
-  }
+                if (target === copy) {
+                    continue;
+                }
+                else if (copy !== undefined) {
+                    target[name] = copy;
+                }
+            }
+        }
+    }
 
-  if (Math.abs(kite.directionUpsideDown) > Math.PI) {
-    rotationWarning = new textComponent("30px", "Consolas", "black", mGameArea.width/2-100, mGameArea.height/2-30, "text");
-    rotationWarning.text = "Line Crossed!";
-    rotationWarning.draw();
-  }
-
-  // logging
-  if (mGameArea.frameNo % 10 == 0) {
-    dataset.push( {
-      input: kite.normInput(),
-      output: [controlValue/1000]
-    });
-  }
+    return target;
 }
 
-function gameOver() {
-  gameOverTextComp = new textComponent("30px", "Consolas", "black", mGameArea.width/2-100, mGameArea.height/2-30, "text");
-  gameOverTextComp.text = "Game Over"
-  gameOverTextComp.draw();
-  clearInterval(mGameArea.interval);
+function createSlider(options) {
+  var slider = document.createElement("input")
+  var defaults = {
+    "type": "range",
+    "min": 0,
+    "max": 1000,
+    "step": 1,
+    "style": "width:400px"
+  }
+  options = merge(defaults, options || {})
 
-  document.getElementById("output").innerHTML = JSON.stringify(dataset, null, 2);
+  Object.keys(options).forEach( function(key) {
+    slider.setAttribute(key, options[key])
+  })
+
+  return slider
 }
 
-function newControlSliderValue(val) {
-  controlValue = val;
+function createParagraph(text) {
+  var p = document.createElement("p")
+  p.innerHTML = text
+  return p
 }

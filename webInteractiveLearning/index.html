@@ -12,18 +12,12 @@ canvas {
 <body onload="init()">
 <script>
   function init() {
-    setup();
+    setup()
     // startGameWithNetwork(false);
   }
 </script>
 
-
-<br>
-<p>Control</p>
-<input id="sliderControl" type="range" min="0" max="1000" step="1" oninput="newControlSliderValue(this.value)" style="width:400px"/>
-<br>
-<p>Motor Position</p>
-<input id="sliderMotor" type="range" min="0" max="1000" step="1" style="width:400px"/>
+<div id="simulation"> </div>
 
 <button onclick="learn()">Learn</button>
 
