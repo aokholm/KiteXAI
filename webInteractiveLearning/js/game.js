@@ -25,7 +25,7 @@ var simulation;
 
 function setup() {
   simulation = new Simulation();
-  simulation.start();
+
   // network = Network.fromJSON(networkExported);
 }
 
@@ -35,6 +35,8 @@ function Simulation() {
   this.canvas.width = 400
   this.canvas.height = 400
   this.controlValue = 500
+
+  this.defaultNumberOfSets = 5
 
   this.context = this.canvas.getContext("2d")
 
@@ -50,13 +52,22 @@ function Simulation() {
   this.container.appendChild(document.createElement("br"))
   this.container.appendChild(createParagraph("motor position:"))
   this.container.appendChild(this.motorSlider)
+  this.container.appendChild(document.createElement("br"))
+
+  this.container.appendChild(createButton("Start create \"game\"", "simulation.createSets(simulation.defaultNumberOfSets)"))
+  this.container.appendChild(createButton("Stop game", "simulation.stop()"))
+  this.container.appendChild(createButton("Load StoreDataset", "simulation.datasets = storeDatasets"))
+  this.container.appendChild(createButton("Show Lines", "simulation.plotDatasetsLines()"))
+  this.container.appendChild(createButton("Clear datasets", "simulation.datasets = []"))
+  this.container.appendChild(createButton("Clear view", "simulation.clear()"))
 
 
-  this.timerText = new TextComponent(this.canvas.width-200, 40)
-  this.rotationWarningText = new TextComponent(this.canvas.width/2-100, this.canvas.height/2-30, {"text": "Lines crossed!"})
+  this.timerText = new TextComponent(this.canvas.width-200, 40, {"fontSize": "20px"})
+  this.statusText = new TextComponent(20, 40, {"fontSize": "20px"})
+  this.rotationWarningText = new TextComponent(this.canvas.width/2-100, this.canvas.height/2-30, {"text": "Lines crossed!", "active": false})
   this.gameOverText = new TextComponent(this.canvas.width/2-100, this.canvas.height/2-30, {"text": "Game Over", "active": false})
 
-  this.drawables = [this.timerText, this.rotationWarningText, this.gameOverText]
+  this.drawables = [this.timerText, this.rotationWarningText, this.gameOverText, this.statusText]
 
   this.datasets = []
   this.activeSet = []
@@ -64,14 +75,68 @@ function Simulation() {
 
 Simulation.prototype = {
 
-  start : function(network) {
+  setup : function(network) {
     this.frameNo = 0;
-    this.interval = setInterval(this.loop.bind(this), this.updateInterval)
-
+    this.activeSet = []
     this.kite = new KiteComponent(200, this.canvas.height-20, 0, network);
-    this.drawables.push(this.kite)
-
+    this.gameOverText.options.active = false
     this.draw()
+  },
+
+  start : function() {
+    this.interval = setInterval(this.loop.bind(this), this.updateInterval)
+  },
+
+  stop : function() {
+    clearInterval(this.interval)
+  },
+
+  pause : function(time) {
+    return new Promise( function(resolve, reject) {
+      setTimeout( function() {
+        resolve()
+      }, time)
+    })
+  },
+
+  createSet : function() {
+    this.setup()
+    return this.pause(500)
+    .then(function () {
+      simulation.start()
+
+      return new Promise( function(resolve, reject) {
+        // works like a defered promise
+        simulation.resolve = resolve // when the game ends the acive set will be returned
+        simulation.reject = reject
+      })
+    })
+
+  },
+
+  createSets : function(N) {
+
+    this.statusText.options.text = "Set " + (this.defaultNumberOfSets - N + 1) + " out of " + this.defaultNumberOfSets
+
+    if (N == 0) {
+      this.statusText.options.text = this.defaultNumberOfSets + " sets collected!"
+      this.draw()
+      return true
+    }
+
+    return this.createSet()
+    .then(function (dataset) {
+      console.log("resolve");
+      console.log(N);
+      simulation.datasets.push(dataset)
+      return simulation.createSets(N-1)
+    })
+    .catch(function (dataset) {
+      console.log("reject");
+      console.log(N);
+      return simulation.createSets(N)
+    })
+
   },
 
   clear : function() {
@@ -99,8 +164,11 @@ Simulation.prototype = {
       this.rotationWarningText.options.active = false
     }
 
-    if (this.kite.outOfBounds(this.canvas) || (this.frameNo == 3000)) {
-      this.gameOver()
+    if (this.kite.outOfBounds(this.canvas)) {
+      this.gameOver(false)
+    }
+    if (this.frameNo == 400) {
+      this.gameOver(true) // sucessfully ended the game
     }
 
     this.timerText.options.text = "SCORE: " + this.frameNo;
@@ -111,6 +179,8 @@ Simulation.prototype = {
     this.drawables.map (function(drawable) {
       drawable.draw(this.context)
     }, this)
+
+    this.kite.draw(this.context)
 
     // store reference
     this.motorSlider.value = this.kite.motorControl.pos
@@ -129,79 +199,51 @@ Simulation.prototype = {
     }
   },
 
-  gameOver : function() {
+  gameOver : function(success) {
     this.gameOverText.options.active = true
     this.rotationWarningText.options.active = false
 
     clearInterval(this.interval)
 
-    document.getElementById("output").innerHTML = JSON.stringify(this.activeSet, null, 2);
-  }
+    this.pause(500)
+    .then(function () {
+      if (success)
+        simulation.resolve(simulation.activeSet)
+      else
+        simulation.reject(simulation.activeSet)
+    })
+  },
 
-}
+  plotDatasetsLines : function() {
 
+    var colors = palette('tol-dv', this.datasets.length);
 
-//
-// plotLine: function(line, color) {
-//   ctx = this.context;
-//
-//   // draw the kite
-//   ctx.strokeStyle = "#000000";
-//   if (color) {
-//     ctx.strokeStyle = "#" + color;
-//   }
-//
-//   ctx.lineWidth=1;
-//   ctx.beginPath();
-//   ctx.moveTo(line[0][0], line[0][1]);
-//
-//   for (var i = 1; i < line.length; i++) {
-//     ctx.lineTo(line[i][0], line[i][1]);
-//   }
-//   ctx.stroke();
-// }
-
-
-
-
-function plotMultipleStart() {
-  mGameArea.clear();
-  var startIndex, endIndex, N;
-  startIndex = mGameArea.width*0.1;
-  endIndex = mGameArea.width*0.9;
-  N = 100;
-  var width = endIndex - startIndex;
-  var increment = width / (N-1);
-  var colors = palette('tol-dv', N);
-  for (i = 0; i < N; i++) {
-    var startX = startIndex + increment*i;
-    playGameFastForward(network, startX, colors[i]);
-  }
-}
-
-function plotDataset(dataset) {
-  var line = dataset.map( function ( data ) {
-    return [data.input[0]*mGameArea.width, data.input[1]*mGameArea.height]
-  });
-
-  console.log(line);
-  mGameArea.plotLine(line, "000000");
-}
-
-
-function playGameFastForward(network, startX, color) {
-  kite = new KiteComponent(20, 20, "red", startX, mGameArea.height-20, network);
-  var position = [];
-  for (var i=0; i< 1000; i++) {
-    position.push([kite.x, kite.y]);
-
-    kite.newPos();
-
-    if (kite.outOfBounds()) {
-      break;
+    for (var i = 0; i < this.datasets.length; i++) {
+      var line = this.datasets[i].map( function ( data ) {
+        return [data.input[0]*this.canvas.width, data.input[1]*this.canvas.height]
+      }, this)
+      plotLine(this.context, line, colors[i])
     }
   }
-  mGameArea.plotLine(position, color)
+
+}
+
+
+function plotLine(ctx, line, color) {
+    // draw the kite
+    ctx.strokeStyle = "#000000";
+    if (color) {
+      ctx.strokeStyle = "#" + color;
+    }
+
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(line[0][0], line[0][1]);
+
+    for (var i = 1; i < line.length; i++) {
+      ctx.lineTo(line[i][0], line[i][1]);
+    }
+    ctx.stroke();
 }
 
 function MotorControl() {
@@ -336,7 +378,6 @@ function createSlider(options) {
   Object.keys(options).forEach( function(key) {
     slider.setAttribute(key, options[key])
   })
-
   return slider
 }
 
@@ -344,4 +385,43 @@ function createParagraph(text) {
   var p = document.createElement("p")
   p.innerHTML = text
   return p
+}
+
+function createButton(text, action) {
+  var button = document.createElement("button")
+  button.setAttribute("onclick", action)
+  button.innerHTML = text
+  return button
+}
+
+// NOT CURRENTLY IN USE
+function plotMultipleStart() {
+  mGameArea.clear();
+  var startIndex, endIndex, N;
+  startIndex = mGameArea.width*0.1;
+  endIndex = mGameArea.width*0.9;
+  N = 100;
+  var width = endIndex - startIndex;
+  var increment = width / (N-1);
+  var colors = palette('tol-dv', N);
+  for (i = 0; i < N; i++) {
+    var startX = startIndex + increment*i;
+    playGameFastForward(network, startX, colors[i]);
+  }
+}
+
+// NOT CURRENTLY IN USE
+function playGameFastForward(network, startX, color) {
+  kite = new KiteComponent(20, 20, "red", startX, mGameArea.height-20, network);
+  var position = [];
+  for (var i=0; i< 1000; i++) {
+    position.push([kite.x, kite.y]);
+
+    kite.newPos();
+
+    if (kite.outOfBounds()) {
+      break;
+    }
+  }
+  mGameArea.plotLine(position, color)
 }
