@@ -9,26 +9,16 @@ canvas {
 }
 </style>
 </head>
-<body onload="init()">
-<script>
-  function init() {
-    setup()
-    // startGameWithNetwork(false);
-  }
-</script>
+<body onload="setup()">
 
 <div id="simulation"> </div>
-
-<button onclick="learn()">Learn</button>
-
-<div id="output"></div>
-
+<div id="ai"> </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/synaptic/1.0.8/synaptic.js"></script>
-<script src="js/palette.js"></script>
-<script src="js/data.js"></script>
-<script src="js/game.js"></script>
-<script src="js/analysis.js"></script>
+<script src="js/lib/palette.js"></script>
+<script src="js/preload.js"></script>
+<script src="js/simulation.js"></script>
+<script src="js/ai.js"></script>
 
 </body>
 </html>

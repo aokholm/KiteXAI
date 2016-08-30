@@ -56,8 +56,8 @@ function Simulation() {
 
   this.container.appendChild(createButton("Start create \"game\"", "simulation.createSets(simulation.defaultNumberOfSets)"))
   this.container.appendChild(createButton("Stop game", "simulation.stop()"))
-  this.container.appendChild(createButton("Load StoreDataset", "simulation.datasets = storeDatasets"))
-  this.container.appendChild(createButton("Show Lines", "simulation.plotDatasetsLines()"))
+  this.container.appendChild(createButton("Load pregenerated dataset", "simulation.datasets = storedDatasets"))
+  this.container.appendChild(createButton("Show lines", "simulation.plotDatasetsLines()"))
   this.container.appendChild(createButton("Clear datasets", "simulation.datasets = []"))
   this.container.appendChild(createButton("Clear view", "simulation.clear()"))
 
@@ -207,10 +207,19 @@ Simulation.prototype = {
 
     this.pause(500)
     .then(function () {
-      if (success)
-        simulation.resolve(simulation.activeSet)
-      else
-        simulation.reject(simulation.activeSet)
+      if (simulation.kite.network) {
+        simulation.setup(simulation.kite.network)
+        simulation.pause(500)
+        .then( function() {
+          simulation.start()
+        })
+      } else {
+        if (success)
+          simulation.resolve(simulation.activeSet)
+        else
+          simulation.reject(simulation.activeSet)
+      }
+
     })
   },
 
@@ -392,36 +401,4 @@ function createButton(text, action) {
   button.setAttribute("onclick", action)
   button.innerHTML = text
   return button
-}
-
-// NOT CURRENTLY IN USE
-function plotMultipleStart() {
-  mGameArea.clear();
-  var startIndex, endIndex, N;
-  startIndex = mGameArea.width*0.1;
-  endIndex = mGameArea.width*0.9;
-  N = 100;
-  var width = endIndex - startIndex;
-  var increment = width / (N-1);
-  var colors = palette('tol-dv', N);
-  for (i = 0; i < N; i++) {
-    var startX = startIndex + increment*i;
-    playGameFastForward(network, startX, colors[i]);
-  }
-}
-
-// NOT CURRENTLY IN USE
-function playGameFastForward(network, startX, color) {
-  kite = new KiteComponent(20, 20, "red", startX, mGameArea.height-20, network);
-  var position = [];
-  for (var i=0; i< 1000; i++) {
-    position.push([kite.x, kite.y]);
-
-    kite.newPos();
-
-    if (kite.outOfBounds()) {
-      break;
-    }
-  }
-  mGameArea.plotLine(position, color)
 }
