@@ -16,11 +16,13 @@ function AI() {
 
   this.context = this.canvas.getContext("2d")
   this.container.appendChild(this.canvas)
+  this.directionSlider = createSlider({"oninput": "ai.newDirectionSliderValue(parseFloat(this.value))"})
+  this.container.appendChild(this.directionSlider)
+  this.container.appendChild(document.createElement("br"))
   this.container.appendChild(createButton("Learn ", "ai.prepareAndLearn()"))
   this.container.appendChild(createButton("Load pre-trained network", "ai.network = Network.fromJSON(storedNetwork)"))
   this.container.appendChild(createButton("Play network", "ai.play()"))
-  this.container.appendChild(createButton("Play network", "ai.play()"))
-
+  this.container.appendChild(createButton("Plot traces", "ai.plotTraces()"))
 
   this.inputLayer = new Layer(3)
   this.hiddenLayer = new Layer(10, 'hidden1')
@@ -113,43 +115,62 @@ AI.prototype = {
   },
 
   plotTraces: function() {
+    this.clear()
 
-  }
+    var n = [6,6,5]
+    var N = n.reduce(function(a, e) {return a*e}, 1)
+    var startIndex = this.canvas.width*0.2
+    var endIndex = this.canvas.width*0.8
+    var width = endIndex - startIndex
+    var increment0 = width / (n[0]-1)
+    var increment1 = width / (n[1]-1)
+    var colors = palette('tol-dv', N)
+    var l = 0
+
+    for (i = 0; i < n[0]; i++) {
+      for (var j = 0; j < n[1]; j++) {
+        for (var k = 0; k < n[2]; k++) {
+          var x = startIndex + increment0*i
+          var y = startIndex + increment1*j
+          var dir = k*2*Math.PI/n[2]
+
+          var kite = new KiteComponent(x, y, dir, this.network);
+          var trace = kite.generateTrace(this.canvas, 2000)
+          plotLine(this.context, trace, colors[l])
+          l += 1
+        }
+      }
+
+    }
+  },
+
+  newDirectionSliderValue : function(value) {
+    this.plotContours((value/500 - 1) * 2*Math.PI )
+  },
+
+  plotContours : function(dir) {
+    var width = this.canvas.width
+    var height = this.canvas.height
+
+    var imageData = this.context.createImageData(width, height)
+
+    for (var i = 0; i < width; i++) {
+      for (var j = 0; j < height; j++) {
+        var pix = (i + j*width) * 4
+        var networkLevel = this.network.activate([i/width, j/height, dir])[0]
+        imageData.data[ pix ] = networkLevel * 255
+        imageData.data[ pix + 2 ] = (1-networkLevel) * 255
+        imageData.data[ pix + 3 ] = 255
+      }
+    }
+
+    this.context.putImageData(imageData, 0, 0)
+  },
+
+  clear : function() {
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  },
 }
 
 var testSet
 var ai = new AI()
-
-
-
-// NOT CURRENTLY IN USE
-function plotMultipleStart() {
-  mGameArea.clear();
-  var startIndex, endIndex, N;
-  startIndex = mGameArea.width*0.1;
-  endIndex = mGameArea.width*0.9;
-  N = 100;
-  var width = endIndex - startIndex;
-  var increment = width / (N-1);
-  var colors = palette('tol-dv', N);
-  for (i = 0; i < N; i++) {
-    var startX = startIndex + increment*i;
-    playGameFastForward(network, startX, colors[i]);
-  }
-}
-
-// NOT CURRENTLY IN USE
-function playGameFastForward(network, startX, color) {
-  kite = new KiteComponent(20, 20, "red", startX, mGameArea.height-20, network);
-  var position = [];
-  for (var i=0; i< 1000; i++) {
-    position.push([kite.x, kite.y]);
-
-    kite.newPos();
-
-    if (kite.outOfBounds()) {
-      break;
-    }
-  }
-  mGameArea.plotLine(position, color)
-}

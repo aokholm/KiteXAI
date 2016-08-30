@@ -36,12 +36,12 @@ function Simulation() {
   this.canvas.height = 400
   this.controlValue = 500
 
-  this.defaultNumberOfSets = 5
+  this.defaultNumberOfSets = 10
 
   this.context = this.canvas.getContext("2d")
 
   this.controlSlider = createSlider({"oninput": "simulation.controlValue = parseFloat(this.value)"})
-  this.motorSlider = createSlider()
+  this.motorSlider = createSlider({"readonly": "true"})
 
   this.container = document.getElementById('simulation')
 
@@ -78,7 +78,11 @@ Simulation.prototype = {
   setup : function(network) {
     this.frameNo = 0;
     this.activeSet = []
-    this.kite = new KiteComponent(200, this.canvas.height-20, 0, network);
+    var padding = 0.2
+    var x = this.canvas.width * (padding + Math.random() * (1 - 2*padding))
+    var y = this.canvas.height * (padding + Math.random() * (1 - 2*padding))
+    var dir = (Math.random()*2-1)*Math.PI
+    this.kite = new KiteComponent(x, y, dir, network);
     this.gameOverText.options.active = false
     this.draw()
   },
@@ -167,7 +171,7 @@ Simulation.prototype = {
     if (this.kite.outOfBounds(this.canvas)) {
       this.gameOver(false)
     }
-    if (this.frameNo == 400) {
+    if (this.frameNo == 1000) {
       this.gameOver(true) // sucessfully ended the game
     }
 
@@ -234,30 +238,11 @@ Simulation.prototype = {
       plotLine(this.context, line, colors[i])
     }
   }
-
-}
-
-
-function plotLine(ctx, line, color) {
-    // draw the kite
-    ctx.strokeStyle = "#000000";
-    if (color) {
-      ctx.strokeStyle = "#" + color;
-    }
-
-    ctx.lineWidth=1;
-    ctx.beginPath();
-    ctx.moveTo(line[0][0], line[0][1]);
-
-    for (var i = 1; i < line.length; i++) {
-      ctx.lineTo(line[i][0], line[i][1]);
-    }
-    ctx.stroke();
 }
 
 function MotorControl() {
-  this.pos = 500; // value from 1000 to 0
-  this.speed = 10;
+  this.pos = 500 // value from 1000 to 0
+  this.speed = 10
   this.dirDelta = 0
   this.update = function( targetPos ) {
     if (targetPos != this.pos) {
@@ -310,10 +295,10 @@ function KiteComponent(x, y, dir, network) {
     this.y += Math.cos(this.direction) * this.velocity;
   }
   this.outOfBounds = function(canvas) {
-    var mleft = this.x - this.width/2;
-    var mright = this.x + this.width/2;
-    var mtop = this.y - this.height/2;
-    var mbottom = this.y + this.height/2;
+    var mleft = this.x - this.width/2
+    var mright = this.x + this.width/2
+    var mtop = this.y - this.height/2
+    var mbottom = this.y + this.height/2
 
     return (mleft < 0) || (mright > canvas.width) || (mtop < 0) || (mbottom > canvas.height)
   }
@@ -324,6 +309,18 @@ function KiteComponent(x, y, dir, network) {
     y = this.y / canvas.height
     dir = this.directionUpsideDown / 2*Math.PI
     return [x, y, dir]
+  }
+
+  this.generateTrace = function(canvas, maxStep) {
+    var position = [];
+    for (var i=0; i< maxStep; i++) {
+      position.push([this.x, this.y])
+      this.newPos(this.network.activate(this.normInput(canvas))[0]*1000)
+      if (this.outOfBounds(canvas)) {
+        break
+      }
+    }
+    return position
   }
 }
 
@@ -347,6 +344,23 @@ function TextComponent(x, y, options) {
       ctx.fillText(this.options.text, this.x, this.y);
     }
   }
+}
+
+function plotLine(ctx, line, color) {
+    // draw the kite
+    ctx.strokeStyle = "#000000";
+    if (color) {
+      ctx.strokeStyle = "#" + color;
+    }
+
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(line[0][0], line[0][1]);
+
+    for (var i = 1; i < line.length; i++) {
+      ctx.lineTo(line[i][0], line[i][1]);
+    }
+    ctx.stroke();
 }
 
 function merge() {
